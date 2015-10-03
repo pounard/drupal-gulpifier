@@ -4,8 +4,6 @@
  * Implements hook_form_FORM_ID_alter().
  */
 function gulpifier_form_system_performance_settings_alter(&$form) {
-  $front_theme = variable_get('theme_default', 'bartik');
-  $theme_path = drupal_get_path('theme', $front_theme);
 
   $form['gulpifier'] = array(
     '#type'  => 'fieldset',
@@ -59,17 +57,16 @@ function gulpifier_form_system_performance_settings_validate(&$form, &$form_stat
  */
 function gulpifier_js_alter(&$js) {
   global $theme;
-  $front_theme = variable_get('theme_default', 'bartik');
-  $theme_path = drupal_get_path('theme', $front_theme);
 
-  // Only work on the front-end theme
-  if ($theme !== $front_theme) {
+  if (!theme_get_setting('gulpifier')) {
     return;
   }
 
+  $theme_path = drupal_get_path('theme', $theme);
+
   // We build our whitelist, the whitelist is a list of files that won't be
   // processed by our logic.
-  $whitelist = gulpifier_get_whitelist($front_theme, 'js');
+  $whitelist = gulpifier_get_whitelist($theme, 'js');
 
   // Get the bundle script path.
   $script_path = variable_get('gulpifier_js_bundle_path', $theme_path . '/dist') . '/script.min.js';
@@ -207,17 +204,16 @@ function gulpifier_discover_js($js, $map_path, $script_path, $whitelist) {
  */
 function gulpifier_css_alter(&$css) {
   global $theme;
-  $front_theme = variable_get('theme_default', 'bartik');
-  $theme_path = drupal_get_path('theme', $front_theme);
 
-  // Only work on the front-end theme
-  if ($theme !== $front_theme) {
+  if (!theme_get_setting('gulpifier')) {
     return;
   }
 
+  $theme_path = drupal_get_path('theme', $theme);
+
   // We build our whitelist, the whitelist is a list of files that won't be
   // processed by our logic.
-  $whitelist = gulpifier_get_whitelist($front_theme, 'css');
+  $whitelist = gulpifier_get_whitelist($theme, 'css');
 
   // Get the bundle style path.
   $style_path = variable_get('gulpifier_css_bundle_path', $theme_path . '/dist') . '/style.min.css';
