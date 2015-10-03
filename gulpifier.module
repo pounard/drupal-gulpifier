@@ -74,7 +74,11 @@ function gulpifier_js_alter(&$js) {
 
   // First part of the proces, discover.
   if (variable_get('gulpifier_discover', FALSE)) {
-    $map_path = $theme_path . '/' . ltrim(variable_get('gulpifier_map_path', '/js') . '/map.json', "/");
+    $map_path = theme_get_setting('map_path');
+    if (!$map_path) {
+      $map_path = variable_get('gulpifier_map_path', '/js');
+    }
+    $map_path = $theme_path . '/' . ltrim($map_path . '/map.json', "/");
 
     gulpifier_discover_js($js, $map_path, $script_path, $whitelist);
   }
