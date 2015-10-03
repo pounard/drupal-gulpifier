@@ -103,26 +103,19 @@ function gulpifier_js_alter(&$js) {
   // Get the bundle script path.
   $script_path = variable_get('gulpifier_js_bundle_path', $theme_path . '/dist') . '/script.min.js';
 
-  // First part of the proces, discover.
-  if (variable_get('gulpifier_discover', FALSE)) {
-    $map_path = theme_get_setting('map_path');
-    if (!$map_path) {
-      $map_path = variable_get('gulpifier_map_path', '/js');
-    }
-    $map_path = $theme_path . '/' . ltrim($map_path . '/map.json', "/");
-
-    gulpifier_discover_js($js, $map_path, $script_path, $whitelist);
+  $map_path = theme_get_setting('map_path');
+  if (!$map_path) {
+    $map_path = variable_get('gulpifier_map_path', '/js');
   }
+  $map_path = $theme_path . '/' . trim($map_path, "/") . '/map.json';
 
-  foreach ($js as $name => $settings) {
-    // Exclude all files except for our own, and Drupal.settings
-    if (gulpifier_match($name, $settings, $script_path) && !in_array($name, $whitelist, TRUE)) {
-      unset($js[$name]);
-    }
-    // Force every script to be in the same scope. In that way, we could render
-    // them all together anywhere we want.
-    else {
-      $js[$name]['scope'] = 'header';
+  $map = gulpifier_load_map($map_path);
+
+  if (variable_get('gulpifier_discover', FALSE)) {
+    if (gulpifier_discover_js($js, $map, $script_path, $whitelist)) {
+      // Udpate when necessary map.json
+      $json = json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+      file_put_contents($map_path, $json);
     }
   }
 
@@ -132,8 +125,17 @@ function gulpifier_js_alter(&$js) {
   if (variable_get('gulpifier_single_js', FALSE)) {
 
     foreach ($js as $name => $settings) {
-      // Use the same group for all JS to have a single bundle.
-      $js[$name]['group'] = JS_DEFAULT;
+      // Exclude all files except for our own, and Drupal.settings
+      if (gulpifier_match($name, $settings, $script_path) && !in_array($name, $whitelist, TRUE)) {
+        unset($js[$name]);
+      }
+      else {
+        // Force every script to be in the same scope. In that way, we could
+        // render them all together anywhere we want.
+        $js[$name]['scope'] = 'header';
+        // Use the same group for all JS to have a single bundle.
+        $js[$name]['group'] = JS_DEFAULT;
+      }
     }
 
     // Change its group and weight to be the first one included.
@@ -147,6 +149,14 @@ function gulpifier_js_alter(&$js) {
   else {
     if (isset($js[$script_path])) {
       unset($js[$script_path]);
+    }
+    // Also when running normal operations, we need to exclude settings that
+    // are set to strict false into the map, in order to have the exact same
+    // JS code whether the aggregation is set or not.
+    foreach ($js as $name => $settings) {
+      if (!isset($map[$name]) || !$map[$name]) {
+        unset($js[$name]);
+      }
     }
   }
 }
@@ -176,21 +186,13 @@ function gulpifier_get_whitelist($theme, $type) {
 }
 
 /**
- * Populate a map.json with the JS files of the current page
+ * Load theme path map.
  *
- * During discovery, we will try to populate the map.json file
- * with JS files that are included on each page of the site.
+ * @param string $theme
  *
- * @param $js
- *  The big JS array of the current page provided by Drupal
- * @param $map_path
- *  The JSON map file path
- * @param $script_path
- *  The minified JS file path
- * @param $whitelist
- *  The JS whitelist from the theme .info file
+ * @return array
  */
-function gulpifier_discover_js($js, $map_path, $script_path, $whitelist) {
+function gulpifier_load_map($map_path) {
 
   // Load previous list
   $contents = file_get_contents($map_path);
@@ -199,24 +201,48 @@ function gulpifier_discover_js($js, $map_path, $script_path, $whitelist) {
     // We have a list, parse it
     $list = drupal_json_decode($contents);
   }
+
   // else reading file failed, and we won't update it programmatically, but
   // we will still remove our single file
+  if (!$list) {
+    $list = array();
+  }
 
+  return $list;
+}
+
+/**
+ * Populate a map.json with the JS files of the current page
+ *
+ * During discovery, we will try to populate the map.json file
+ * with JS files that are included on each page of the site.
+ *
+ * @param array $js
+ *  The big JS array of the current page provided by Drupal
+ * @param array $map_path
+ *  The JSON map file path
+ * @param string $script_path
+ *  The minified JS file path
+ * @param array $whitelist
+ *  The JS whitelist from the theme .info file
+ *
+ * @return boolean
+ *  True if modified.
+ */
+function gulpifier_discover_js($js, $map, &$script_path, $whitelist) {
+  $modified = false;
   foreach ($js as $name => $settings) {
     // If we have a list, update it
-    if (gulpifier_match($name, $settings) && $list !== FALSE && !in_array($name, $whitelist, TRUE)) {
+    if (gulpifier_match($name, $settings) && $map !== FALSE && !in_array($name, $whitelist, TRUE)) {
       // TRUE will add it, FALSE will remove it, edit the map.json file
       // directly if you need to exclude a file
-      $list[$name] = isset($list[$name]) ? $list[$name] : TRUE;
+      if (!isset($map[$name])) {
+        $map[$name] = true;
+        $modified = true;
+      }
     }
   }
-  // Udpate map.json
-  if ($list !== FALSE && defined('JSON_PRETTY_PRINT')) {
-    $json = json_encode($list, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($contents !== $json) {
-      file_put_contents($map_path, $json);
-    }
-  }
+  return $modified;
 }
 
 /**
@@ -238,9 +264,10 @@ function gulpifier_css_alter(&$css) {
   // Get the bundle style path.
   $style_path = variable_get('gulpifier_css_bundle_path', $theme_path . '/dist') . '/style.min.css';
 
-  // alouette_single_css means we work in a production environment, so we analyse the
-  // only need our single CSS file
+  // gulpifier_single_css means we work in a production environment, so we
+  // analyse the only need our single CSS file
   if (variable_get('gulpifier_single_css', FALSE)) {
+
     // Here we do a whitelist only on our file and inline CSS
     foreach ($css as $name => $settings) {
 
