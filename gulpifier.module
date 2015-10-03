@@ -100,6 +100,8 @@ function gulpifier_js_alter(&$js) {
   // processed by our logic.
   $whitelist = gulpifier_get_whitelist($theme, 'js');
 
+  $discover_enabled = variable_get('gulpifier_discover', FALSE);
+
   // Get the bundle script path.
   $script_path = variable_get('gulpifier_js_bundle_path', $theme_path . '/dist') . '/script.min.js';
 
@@ -111,7 +113,7 @@ function gulpifier_js_alter(&$js) {
 
   $map = gulpifier_load_map($map_path);
 
-  if (variable_get('gulpifier_discover', FALSE)) {
+  if ($discover_enabled) {
     if (gulpifier_discover_js($js, $map, $script_path, $whitelist)) {
       // Udpate when necessary map.json
       $json = json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -154,8 +156,14 @@ function gulpifier_js_alter(&$js) {
     // are set to strict false into the map, in order to have the exact same
     // JS code whether the aggregation is set or not.
     foreach ($js as $name => $settings) {
-      if (!isset($map[$name]) || !$map[$name]) {
-        unset($js[$name]);
+      if ($discover_enabled) {
+        if (isset($map[$name]) && !$map[$name]) {
+          unset($js[$name]);
+        }
+      } else {
+        if (!isset($map[$name]) || !$map[$name]) {
+          unset($js[$name]);
+        }
       }
     }
   }
@@ -195,7 +203,7 @@ function gulpifier_get_whitelist($theme, $type) {
 function gulpifier_load_map($map_path) {
 
   // Load previous list
-  $contents = file_get_contents($map_path);
+  $contents = @file_get_contents($map_path);
   $list = FALSE;
   if ($contents !== FALSE) {
     // We have a list, parse it
@@ -219,7 +227,7 @@ function gulpifier_load_map($map_path) {
  *
  * @param array $js
  *  The big JS array of the current page provided by Drupal
- * @param array $map_path
+ * @param array $map
  *  The JSON map file path
  * @param string $script_path
  *  The minified JS file path
@@ -229,7 +237,7 @@ function gulpifier_load_map($map_path) {
  * @return boolean
  *  True if modified.
  */
-function gulpifier_discover_js($js, $map, &$script_path, $whitelist) {
+function gulpifier_discover_js($js, &$map, $script_path, $whitelist) {
   $modified = false;
   foreach ($js as $name => $settings) {
     // If we have a list, update it
