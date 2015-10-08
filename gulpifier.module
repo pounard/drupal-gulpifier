@@ -183,10 +183,20 @@ function gulpifier_get_whitelist($theme, $type) {
   $whitelist = (array) theme_get_setting('gulpifier_whitelist', $theme);
 
   // Transform the module_name:path notation
-  foreach ($whitelist as &$file) {
-    if (FALSE !== strstr($file, ':')) {
-      list($module, $path) = explode(':', $file, 1);
-      $file = drupal_get_path('module', $module) . $path;
+  if (isset($whitelist['css'])) {
+    foreach ($whitelist['css'] as &$file) {
+      if (FALSE !== strstr($file, ':')) {
+        list($module, $path) = explode(':', $file, 2);
+        $file = drupal_get_path('module', $module) . $path;
+      }
+    }
+  }
+  if (isset($whitelist['js'])) {
+    foreach ($whitelist['js'] as &$file) {
+      if (FALSE !== strstr($file, ':')) {
+        list($module, $path) = explode(':', $file, 2);
+        $file = drupal_get_path('module', $module) . $path;
+      }
     }
   }
 
