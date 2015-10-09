@@ -187,7 +187,7 @@ function gulpifier_get_whitelist($theme, $type) {
     foreach ($whitelist[$type] as $index => $file) {
       if (FALSE !== strstr($file, ':')) {
         list($module, $path) = explode(':', $file, 2);
-        $whitelist[$type][$index] = drupal_get_path('module', $module) . $path;
+        $whitelist[$type][$index] = drupal_get_path('module', $module) . '/' . $path;
       }
     }
   }
